@@ -1,49 +1,69 @@
-import pandas as pd
+"""
+MODULE: excel_tools.py
+AUTHOR: Kilian Sender
+DESCRIPTION: 
+    Reusable utility functions for Excel reporting tasks.
+    Focuses on UX improvements like auto-adjusting column widths.
+"""
+
 import os
+import pandas as pd
 
-def save_excel_auto_width(df, filepath, sheetname='Report'):
+def save_excel_auto_width(df: pd.DataFrame, filepath: str, sheetname: str = 'Report') -> None:
     """
-    Speichert einen Pandas DataFrame als Excel-Datei und passt 
-    die Spaltenbreite automatisch an den Inhalt an.
-    
+    Saves a Pandas DataFrame to Excel and automatically adjusts column widths 
+    to fit the content (Auto-Fit).
+
     Args:
-        df (pd.DataFrame): Die Daten, die gespeichert werden sollen.
-        filepath (str): Der volle Pfad inkl. Dateiname (z.B. 'reports/liste.xlsx').
-        sheetname (str): Name des Tabellenblatts (Standard: 'Report').
+        df (pd.DataFrame): The data to save.
+        filepath (str): Full output path (e.g., 'reports/output.xlsx').
+        sheetname (str, optional): Name of the Excel sheet. Defaults to 'Report'.
+    
+    Raises:
+        PermissionError: If the file is open in Excel while writing.
     """
     
-    # Sicherstellen, dass der Ordner existiert (Sicherheits-Check)
-    ordner = os.path.dirname(filepath)
-    if ordner and not os.path.exists(ordner):
-        os.makedirs(ordner)
-        print(f"📁 Ordner wurde erstellt: {ordner}")
+    # 1. Path Safety Check
+    folder = os.path.dirname(filepath)
+    if folder and not os.path.exists(folder):
+        os.makedirs(folder)
+        print(f"   [INFO] Created directory: {folder}")
 
-    print(f"💾 Speichere Excel-Datei: {filepath}...")
+    print(f"   [IO] Saving Excel report to: {filepath}...")
 
-    # Der "Engine" Parameter ist wichtig für die Formatierung
-    with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
-        # 1. Daten schreiben
-        df.to_excel(writer, sheet_name=sheetname, index=False)
-        
-        # 2. Arbeitsblatt für Bearbeitung holen
-        worksheet = writer.sheets[sheetname]
-        
-        # 3. Durch alle Spalten loopen und Breite anpassen
-        for column in worksheet.columns:
-            max_length = 0
-            # Spaltenbuchstabe holen (A, B, C...)
-            column_letter = column[0].column_letter 
+    try:
+        # 2. Initialize Writer (using openpyxl engine)
+        with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name=sheetname, index=False)
             
-            for cell in column:
-                try:
-                    # Wir messen die Länge des Inhalts als String
-                    if len(str(cell.value)) > max_length:
-                        max_length = len(str(cell.value))
-                except:
-                    pass
+            # 3. Access the Worksheet Object for Formatting
+            worksheet = writer.sheets[sheetname]
             
-            # Breite setzen (Länge + 2 Puffer für Lesbarkeit)
-            adjusted_width = (max_length + 2)
-            worksheet.column_dimensions[column_letter].width = adjusted_width
+            # 4. Iterate columns to calculate optimal width
+            for column in worksheet.columns:
+                max_length = 0
+                # Get column letter (A, B, C...) from the header cell
+                # openpyxl version safe approach
+                column_letter = column[0].column_letter 
+                
+                for cell in column:
+                    try:
+                        # Measure length of cell content (converted to string)
+                        cell_len = len(str(cell.value))
+                        if cell_len > max_length:
+                            max_length = cell_len
+                    except:
+                        pass
+                
+                # Apply Width: Max Length + Buffer (for filter arrows/margins)
+                adjusted_width = (max_length + 2)
+                worksheet.column_dimensions[column_letter].width = adjusted_width
 
-    print(f"✅ Fertig! Datei liegt hier: {filepath}")
+        print("   [SUCCESS] File saved with auto-formatting.")
+
+    except PermissionError:
+        print(f"   [ERROR] Could not write to {filepath}. Is the file open in Excel?")
+        raise
+    except Exception as e:
+        print(f"   [ERROR] An unexpected error occurred: {e}")
+        raise
